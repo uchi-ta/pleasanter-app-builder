@@ -1,0 +1,138 @@
+<div class="pkpi" id="pkpi-__ID__"><div class="pkpi-msg">集計中…</div></div>
+<style>
+.pkpi{--pk-bar:#2a78d6;--pk-track:rgba(137,135,129,.18);--pk-muted:#6f6d68;font-size:13px;padding:4px 8px 8px}
+.pkpi-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+.pkpi-card{border:1px solid rgba(137,135,129,.35);border-radius:6px;padding:8px 12px}
+.pkpi-label{color:var(--pk-muted);font-size:12px}
+.pkpi-value{font-size:22px;font-weight:600;line-height:1.3;font-variant-numeric:tabular-nums}
+.pkpi-note{color:var(--pk-muted);font-size:11px}
+.pkpi-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px 20px}
+.pkpi-chart h4{margin:0 0 6px;font-size:13px;font-weight:600}
+.pkpi-row{display:grid;grid-template-columns:7.5em 1fr 6.5em;align-items:center;gap:6px;padding:1px 0;cursor:default}
+.pkpi-row:hover{background:rgba(137,135,129,.10)}
+.pkpi-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pkpi-track{height:12px;background:var(--pk-track);border-radius:0 4px 4px 0}
+.pkpi-bar{height:12px;background:var(--pk-bar);border-radius:0 4px 4px 0;min-width:1px}
+.pkpi-num{text-align:right;font-variant-numeric:tabular-nums}
+.pkpi-msg{color:var(--pk-muted);padding:8px}
+@media (prefers-color-scheme:dark){.pkpi{--pk-bar:#3987e5;--pk-muted:#a3a19b}}
+</style>
+<script>
+(function () {
+  var CONF = __CONF__;
+  var root = document.getElementById('pkpi-__ID__');
+  function apiGet(id, data) {
+    return new Promise(function (resolve, reject) {
+      $p.apiGet({ id: id, data: data, done: resolve, fail: reject });
+    });
+  }
+  // 200件ずつのページングを辿って全件取得する（値と表示名の2回取得して合成）
+  function fetchAll(table) {
+    var t = CONF.tables[table];
+    function pages(valueType) {
+      var rows = [];
+      function next(offset) {
+        return apiGet(t.siteId, { Offset: offset, View: { ApiDataType: 'KeyValues', ApiColumnKeyDisplayType: 'ColumnName',
+          ApiColumnValueDisplayType: valueType, GridColumns: t.columns } }).then(function (r) {
+          var data = (r.Response && r.Response.Data) || [];
+          rows = rows.concat(data);
+          return (data.length && rows.length < r.Response.TotalCount) ? next(rows.length) : rows;
+        });
+      }
+      return next(0);
+    }
+    return Promise.all([pages('Value'), pages('Text')]).then(function (res) {
+      return res[0].map(function (v, i) {
+        var text = res[1][i] || {};
+        Object.keys(text).forEach(function (k) { v['_t_' + k] = text[k]; });
+        return v;
+      });
+    });
+  }
+  function ymd(d) { return d.toISOString().slice(0, 10); }
+  function dateRange(spec) {
+    var now = new Date(), y = now.getFullYear(), m = now.getMonth(), today = new Date(y, m, now.getDate());
+    var add = function (d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; };
+    if (spec === 'thisMonth') return [new Date(y, m, 1), new Date(y, m + 1, 0)];
+    if (spec === 'lastMonth') return [new Date(y, m - 1, 1), new Date(y, m, 0)];
+    if (spec === 'thisYear') return [new Date(y, 0, 1), new Date(y, 11, 31)];
+    if (spec === 'overdue') return [new Date(1900, 0, 1), add(today, -1)];
+    var mt = /^(next|past):(\d+)$/.exec(spec);
+    if (mt) { var n = +mt[2]; return mt[1] === 'next' ? [today, add(today, n)] : [add(today, -n), today]; }
+    return null;
+  }
+  function match(row, filter) {
+    return Object.keys(filter || {}).every(function (col) {
+      var cond = filter[col], v = row[col];
+      if (Array.isArray(cond)) return cond.map(String).indexOf(String(v)) >= 0;
+      var range = dateRange(cond);
+      if (range) {
+        if (!v || String(v).slice(0, 4) < '1901') return false;
+        var d = String(v).slice(0, 10);
+        return d >= ymd(range[0]) && d <= ymd(range[1]);
+      }
+      return String(v) === String(cond);
+    });
+  }
+  function aggregate(rows, a) {
+    rows = rows.filter(function (r) { return match(r, a.filter); });
+    var num = function (r) {
+      var x = Number(r[a.column]) || 0;
+      return a.weight ? x * (Number(r[a.weight]) || 0) / 100 : x;
+    };
+    if (a.agg === 'count') return rows.length;
+    var sum = rows.reduce(function (s, r) { return s + num(r); }, 0);
+    if (a.agg === 'avg') return rows.length ? sum / rows.length : 0;
+    return sum;
+  }
+  function fmt(v, f) {
+    if (f === 'yen') return '¥' + Math.round(v).toLocaleString('ja-JP');
+    if (f === 'man') return (v / 10000).toLocaleString('ja-JP', { maximumFractionDigits: 1 }) + '万円';
+    if (f === 'pct') return (v * 100).toFixed(1) + '%';
+    return Math.round(v * 10) / 10 === Math.round(v) ? Math.round(v).toLocaleString('ja-JP') : v.toFixed(1);
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function render(data) {
+    var html = '<div class="pkpi-cards">';
+    CONF.cards.forEach(function (c) {
+      var v = aggregate(data[c.table], c);
+      if (c.ratioOf) { var d = aggregate(data[c.table], c.ratioOf); v = d ? v / d : 0; }
+      html += '<div class="pkpi-card"><div class="pkpi-label">' + esc(c.label) + '</div><div class="pkpi-value">' +
+        esc(fmt(v, c.format)) + '</div>' + (c.note ? '<div class="pkpi-note">' + esc(c.note) + '</div>' : '') + '</div>';
+    });
+    html += '</div><div class="pkpi-charts">';
+    CONF.charts.forEach(function (ch) {
+      var groups = {}, order = [];
+      data[ch.table].filter(function (r) { return match(r, ch.filter); }).forEach(function (r) {
+        var key = r[ch.groupBy];
+        if (!(key in groups)) { groups[key] = { label: r['_t_' + ch.groupBy] || key || '(未設定)', rows: [] }; order.push(key); }
+        groups[key].rows.push(r);
+      });
+      var items = order.map(function (k) { return { key: k, label: groups[k].label, value: aggregate(groups[k].rows, { agg: ch.agg, column: ch.column, weight: ch.weight }) }; });
+      if (ch.order === 'key') items.sort(function (a, b) { return Number(a.key) - Number(b.key) || String(a.key).localeCompare(String(b.key)); });
+      else items.sort(function (a, b) { return b.value - a.value; });
+      items = items.slice(0, ch.top || 10);
+      var max = Math.max.apply(null, items.map(function (i) { return i.value; }).concat([1]));
+      html += '<div class="pkpi-chart"><h4>' + esc(ch.title) + '</h4>';
+      items.forEach(function (i) {
+        html += '<div class="pkpi-row" title="' + esc(i.label + '：' + fmt(i.value, ch.format)) + '"><span class="pkpi-name">' + esc(i.label) +
+          '</span><span class="pkpi-track"><span class="pkpi-bar" style="display:block;width:' + (i.value / max * 100).toFixed(1) +
+          '%"></span></span><span class="pkpi-num">' + esc(fmt(i.value, ch.format)) + '</span></div>';
+      });
+      if (!items.length) html += '<div class="pkpi-msg">該当データなし</div>';
+      html += '</div>';
+    });
+    root.innerHTML = html + '</div>';
+  }
+  function start() {
+    if (!window.$p || !$p.apiGet) { return setTimeout(start, 100); }
+    var keys = Object.keys(CONF.tables);
+    Promise.all(keys.map(fetchAll)).then(function (res) {
+      var data = {};
+      keys.forEach(function (k, i) { data[k] = res[i]; });
+      render(data);
+    }).catch(function () { root.innerHTML = '<div class="pkpi-msg">データを取得できませんでした（閲覧権限を確認してください）</div>'; });
+  }
+  start();
+})();
+</script>

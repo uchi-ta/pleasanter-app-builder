@@ -1,0 +1,123 @@
+{
+  "app": "問い合わせ管理",
+  "description": "製品サポート窓口に届いた問い合わせと、その対応履歴を管理するアプリです。",
+  "usage": [
+    "問い合わせを受けたら「問い合わせ」に登録する（受付）",
+    "AIで分類・回答案を作成し、担当者が内容を確認する",
+    "顧客とのやり取りを「対応履歴」に記録する",
+    "解決したら状況を「解決」にする"
+  ],
+  "tables": [
+    {
+      "key": "tickets",
+      "title": "問い合わせ",
+      "description": "顧客からの問い合わせ1件ごとの台帳。対応期限と優先度で管理します。",
+      "keyColumn": "ClassA",
+      "titleColumns": ["ClassA", "Title"],
+      "titleSeparator": " ",
+      "status": [[100, "受付", "受", "status-new"], [200, "対応中", "対", "status-inprogress"],
+                 [300, "顧客回答待ち", "待", "status-review"], [900, "解決", "解", "status-closed"],
+                 [910, "クローズ（対応不要）", "閉", "status-rejected"]],
+      "columns": [
+        {"name": "ClassA", "label": "問い合わせ番号", "required": true},
+        {"name": "Title", "label": "件名", "required": true, "wide": true},
+        {"name": "Status", "label": "状況"},
+        {"name": "ClassB", "label": "顧客名"},
+        {"name": "ClassC", "label": "チャネル", "choices": ["メール", "電話", "Webフォーム", "チャット"]},
+        {"name": "ClassD", "label": "カテゴリ", "choices": ["操作方法", "不具合", "契約・請求", "機能要望", "その他"]},
+        {"name": "ClassE", "label": "優先度", "choices": ["高", "中", "低"]},
+        {"name": "DateA", "label": "受付日", "required": true},
+        {"name": "DateB", "label": "対応期限"},
+        {"name": "Owner", "label": "対応担当"},
+        {"name": "Manager", "label": "サポート責任者"},
+        {"name": "NumA", "label": "対応回数", "Unit": "回", "readOnly": true},
+        {"name": "Body", "label": "問い合わせ内容"}
+      ],
+      "notifications": [{"subject": "優先度「高」の問い合わせが未対応です", "to": "[Manager]", "monitor": ["Status", "ClassE"], "afterView": "未完了"}],
+      "reminders": [{"subject": "対応期限が3日以内の問い合わせ", "line": "[ClassA] [Title] 期限:[DateB] 担当:[Owner]",
+                     "column": "DateB", "days": 3, "view": "未完了", "to": "[Owner]", "repeat": "daily"}],
+      "data": {
+        "count": 100,
+        "sortBy": "DateA",
+        "cols": {
+          "ClassA": "seq:Q-{:04d}",
+          "Status": "pick:100=8,200=8,300=4,900=72,910=8",
+          "ClassD": "pick:操作方法=40,不具合=20,契約・請求=15,機能要望=15,その他=10",
+          "Title": [
+            {"when": {"ClassD": "操作方法"}, "gen": "pick:CSVの取り込み方法を知りたい,権限設定の手順について,一覧の並び順を保存したい,通知メールの設定方法,ダッシュボードの作り方"},
+            {"when": {"ClassD": "不具合"}, "gen": "pick:ログイン後に画面が真っ白になる,検索結果が表示されない,添付ファイルがダウンロードできない,メール通知が届かない"},
+            {"when": {"ClassD": "契約・請求"}, "gen": "pick:請求書の再発行依頼,ライセンス追加の見積依頼,契約更新の手続きについて,支払方法の変更"},
+            {"when": {"ClassD": "機能要望"}, "gen": "pick:一括更新に対応してほしい,スマホ表示の改善要望,外部カレンダーとの連携,帳票出力の追加"},
+            {"gen": "pick:担当者変更の連絡,セミナー参加の問い合わせ,導入事例について"}
+          ],
+          "ClassB": "faker:company",
+          "ClassC": "pick:メール=45,Webフォーム=30,電話=15,チャット=10",
+          "ClassE": [
+            {"when": {"ClassD": "不具合"}, "gen": "pick:高=5,中=4,低=1"},
+            {"gen": "pick:高=1,中=4,低=5"}
+          ],
+          "DateA": [
+            {"when": {"Status": [100, 200, 300]}, "gen": "date:-20..0"},
+            {"gen": "date:-300..-21"}
+          ],
+          "DateB": [
+            {"when": {"ClassE": "高"}, "gen": "date:@DateA+1..3"},
+            {"gen": "date:@DateA+3..10"}
+          ],
+          "Owner": "user",
+          "Manager": "user",
+          "Body": "tmpl:{ClassB}様より{ClassC}で問い合わせ。「{Title}」について確認したいとのこと。"
+        }
+      }
+    },
+    {
+      "key": "responses",
+      "title": "対応履歴",
+      "description": "問い合わせへの回答・調査・連絡の記録。",
+      "status": [[100, "予定", "予", "status-new"], [900, "完了", "完", "status-closed"]],
+      "columns": [
+        {"name": "ClassA", "label": "問い合わせ", "link": "tickets", "required": true, "wide": true},
+        {"name": "Title", "label": "件名", "required": true},
+        {"name": "Status", "label": "状況"},
+        {"name": "ClassB", "label": "対応種別", "choices": ["回答", "調査", "電話連絡", "エスカレーション", "社内確認"]},
+        {"name": "DateA", "label": "対応日時", "required": true, "EditorFormat": "Ymdhm"},
+        {"name": "NumA", "label": "作業時間", "Unit": "分"},
+        {"name": "Owner", "label": "対応者"},
+        {"name": "Body", "label": "対応内容"}
+      ],
+      "summaries": [{"to": "tickets", "column": "NumA", "link": "ClassA", "type": "Count"}],
+      "data": {
+        "count": 100,
+        "cols": {
+          "ClassA": "link:tickets",
+          "Owner": "parent:tickets.Owner",
+          "ClassB": "pick:回答=40,調査=20,電話連絡=15,エスカレーション=10,社内確認=15",
+          "Title": "tmpl:{ClassB}（{parent:tickets.ClassA}）",
+          "Status": "pick:900=9,100=1",
+          "DateA": [
+            {"when": {"Status": 100}, "gen": "datetime:1..7"},
+            {"gen": "datetime:@tickets.DateA+0..5"}
+          ],
+          "NumA": "int:10..120/5",
+          "Body": "pick:手順書を送付して解決を確認,ログを取得して開発部門に調査依頼,電話で状況をヒアリング,回避策を案内,社内で仕様を確認中"
+        }
+      }
+    }
+  ],
+  "ai": [{
+    "title": "AI問い合わせ一次対応",
+    "description": "問い合わせ内容を Claude が読み、カテゴリ・優先度の判定と、回答文の下書きを作成します。",
+    "table": "tickets",
+    "trigger": {"check": "CheckA", "label": "AIで一次対応する"},
+    "system": "あなたはSaaS製品のサポート窓口のベテラン担当者です。丁寧で簡潔な日本語で書きます。分からないことを推測で断定しません。",
+    "instruction": "次の問い合わせを読み、分類と優先度を判定し、顧客への最初の回答文の下書きを作成してください。",
+    "inputs": ["ClassA", "Title", "Status", "ClassB", "ClassC", "ClassD", "ClassE", "DateA", "DateB", "Body"],
+    "related": {"table": "responses", "link": "ClassA", "sort": "DateA", "limit": 5, "columns": ["DateA", "ClassB", "Title", "Body"]},
+    "outputs": [
+      {"column": "ClassF", "key": "category", "label": "AI: 推定カテゴリ", "allowed": ["操作方法", "不具合", "契約・請求", "機能要望", "その他"], "instruction": "カテゴリ（操作方法/不具合/契約・請求/機能要望/その他 のいずれかの文字列）"},
+      {"column": "ClassG", "key": "priority", "label": "AI: 推奨優先度", "allowed": ["高", "中", "低"], "instruction": "優先度（高/中/低 のいずれかの文字列）"},
+      {"column": "DescriptionA", "key": "reply", "label": "AI: 回答の下書き", "instruction": "顧客への回答文の下書き（200字程度の文字列）"}
+    ],
+    "stampColumn": "ClassH"
+  }]
+}

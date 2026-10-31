@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PYTHONUTF8=1 python -P .claude/skills/pleasanter-app/scripts/autogen.py:*)",
+      "Bash(PYTHONUTF8=1 python -P .claude/skills/pleasanter-app/scripts/make_app.py:*)",
+      "Bash(PYTHONUTF8=1 python -P .claude/skills/pleasanter-app/scripts/env.py:*)",
+      "Bash(PYTHONUTF8=1 python -P .claude/skills/pleasanter-app/scripts/build.py:*)",
+      "Bash(PYTHONUTF8=1 python -P .claude/skills/pleasanter-app/scripts/register.py:*)",
+      "Bash(PYTHONUTF8=1 python -P .claude/skills/pleasanter-app/scripts/syslogs.py:*)",
+      "Bash(PYTHONUTF8=1 python -P .claude/skills/pleasanter-app/scripts/wiki.py:*)",
+      "Bash(PYTHONUTF8=1 python -P .claude/skills/pleasanter-app/scripts/dashboard.py:*)",
+      "Bash(PYTHONUTF8=1 python -P output/*/gen_rows.py:*)",
+      "Read(./output/**)",
+      "Edit(./output/**)",
+      "Write(./output/**)"
+    ]
+  }
+}

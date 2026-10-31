@@ -1,0 +1,132 @@
+{
+  "app": "IT資産管理",
+  "tables": [
+    {
+      "key": "assets",
+      "title": "資産台帳",
+      "keyColumn": "ClassA",
+      "titleColumns": ["ClassA", "Title"],
+      "titleSeparator": " ",
+      "status": [
+        [100, "在庫", "在", "status-new"],
+        [200, "稼働中", "稼", "status-inprogress"],
+        [300, "修理中", "修", "status-review"],
+        [400, "貸出中", "貸", "status-preparation"],
+        [900, "廃棄済", "廃", "status-closed"]
+      ],
+      "columns": [
+        {"name": "ClassA", "label": "資産番号", "required": true},
+        {"name": "Title", "label": "機種名", "wide": true},
+        {"name": "Status", "label": "状態"},
+        {"name": "ClassB", "label": "資産区分", "required": true,
+         "choices": ["ノートPC", "デスクトップPC", "モニター", "スマートフォン", "タブレット", "複合機／プリンター", "ネットワーク機器", "サーバー"]},
+        {"name": "ClassC", "label": "メーカー"},
+        {"name": "ClassD", "label": "シリアル番号"},
+        {"name": "ClassH", "label": "OS"},
+        {"name": "Owner", "label": "利用者"},
+        {"name": "ClassE", "label": "管理部署", "choices": "@depts", "required": true},
+        {"name": "ClassF", "label": "設置場所",
+         "choices": ["本社 3F", "本社 4F", "本社 5F", "本社 サーバールーム", "大阪支店", "名古屋営業所", "在宅勤務", "-"]},
+        {"name": "Manager", "label": "IT担当者"},
+        {"name": "ClassG", "label": "取得形態", "choices": ["購入", "リース", "レンタル"], "required": true},
+        {"name": "DateA", "label": "取得日", "required": true},
+        {"name": "DateB", "label": "保証・リース期限"},
+        {"name": "NumA", "label": "取得価格", "format": "C"},
+        {"name": "NumB", "label": "修理費合計", "format": "C", "readOnly": true},
+        {"name": "CheckA", "label": "棚卸確認済"},
+        {"name": "Body", "label": "備考"}
+      ],
+      "grid": ["ResultId", "ClassA", "Title", "Status", "ClassB", "ClassC", "Owner", "ClassE", "ClassF", "DateB", "NumA", "NumB", "CheckA", "Manager", "UpdatedTime"],
+      "historyColumns": ["Ver", "Status", "Owner", "ClassE", "ClassF", "Comments", "Updator", "UpdatedTime"],
+      "aggregations": [{"groupBy": "Status"}, {"groupBy": "ClassB"}, {"groupBy": "ClassB", "target": "NumA"}],
+      "views": [
+        {"name": "標準", "sort": {"ClassA": "asc"}},
+        {"name": "利用中（廃棄済を除く）", "filter": {"Status": [100, 200, 300, 400]}, "sort": {"ClassA": "asc"}},
+        {"name": "修理中", "filter": {"Status": [300]}, "sort": {"UpdatedTime": "desc"}},
+        {"name": "区分×部署 集計", "mode": "Crosstab", "filter": {"Status": [100, 200, 300, 400]},
+         "CrosstabGroupByX": "ClassB", "CrosstabGroupByY": "ClassE", "CrosstabAggregateType": "Count", "CrosstabValue": "NumA"},
+        {"name": "状態別ボード", "mode": "Kamban",
+         "KambanGroupByX": "Status", "KambanGroupByY": "ClassB", "KambanAggregateType": "Count", "KambanValue": "NumA"}
+      ],
+      "notifications": [
+        {"subject": "資産が修理中になりました", "to": "[Manager]", "monitor": ["Status", "Owner", "Body"], "afterView": "修理中"}
+      ],
+      "reminders": [
+        {"subject": "保証・リース期限が30日以内のIT資産",
+         "body": "以下のIT資産の保証・リース期限が30日以内に到来します。更新・返却・入替を検討してください。",
+         "line": "[ClassA] [Title] 期限:[DateB] 利用者:[Owner]", "column": "DateB", "days": 30, "view": "利用中（廃棄済を除く）"}
+      ]
+    },
+    {
+      "key": "repairs",
+      "title": "修理・保守履歴",
+      "status": [
+        [100, "受付", "受", "status-new"],
+        [200, "対応中", "対", "status-inprogress"],
+        [300, "部品待ち", "待", "status-review"],
+        [900, "完了", "完", "status-closed"]
+      ],
+      "columns": [
+        {"name": "ClassA", "label": "対象資産", "link": "assets", "required": true, "wide": true},
+        {"name": "Title", "label": "件名", "wide": true},
+        {"name": "Status", "label": "対応状況"},
+        {"name": "ClassB", "label": "種別", "required": true, "choices": ["故障修理", "部品交換", "定期保守", "ソフトウェア対応", "点検"]},
+        {"name": "ClassC", "label": "依頼先", "choices": ["メーカー保守", "販売代理店", "社内（情報システム部）"]},
+        {"name": "DateA", "label": "受付日", "default": "0", "required": true},
+        {"name": "DateB", "label": "完了日"},
+        {"name": "NumA", "label": "費用", "format": "C"},
+        {"name": "Owner", "label": "依頼者"},
+        {"name": "Manager", "label": "対応担当者"},
+        {"name": "Body", "label": "内容"}
+      ],
+      "linkColumns": ["ResultId", "Title", "Status", "ClassB", "DateA", "DateB", "NumA", "UpdatedTime"],
+      "aggregations": [{"groupBy": "Status"}, {"groupBy": "ClassB", "target": "NumA"}],
+      "summaries": [{"to": "assets", "column": "NumB", "link": "ClassA", "type": "Total", "source": "NumA"}],
+      "views": [
+        {"name": "標準", "sort": {"DateA": "desc"}},
+        {"name": "未完了", "filter": {"Status": [100, 200, 300]}, "sort": {"DateA": "asc"}},
+        {"name": "月別費用", "mode": "Crosstab", "CrosstabGroupByX": "DateA", "CrosstabGroupByY": "ClassB",
+         "CrosstabAggregateType": "Total", "CrosstabValue": "NumA", "CrosstabTimePeriod": "Monthly"}
+      ]
+    },
+    {
+      "key": "licenses",
+      "title": "ソフトウェアライセンス台帳",
+      "status": [
+        [100, "有効", "有", "status-inprogress"],
+        [200, "更新手続中", "更", "status-review"],
+        [900, "期限切れ", "切", "status-closed"],
+        [910, "解約", "解", "status-rejected"]
+      ],
+      "columns": [
+        {"name": "Title", "label": "ソフトウェア名", "wide": true},
+        {"name": "Status", "label": "契約状態"},
+        {"name": "ClassA", "label": "ライセンス形態", "required": true, "choices": ["サブスクリプション", "ボリュームライセンス", "永続ライセンス", "OEM"]},
+        {"name": "ClassB", "label": "ベンダー"},
+        {"name": "ClassC", "label": "契約番号"},
+        {"name": "ClassD", "label": "利用部署", "choices": "@depts", "required": true},
+        {"name": "NumA", "label": "保有数", "Unit": "本", "required": true},
+        {"name": "NumB", "label": "使用数", "Unit": "本"},
+        {"name": "NumC", "label": "残数", "Unit": "本", "readOnly": true},
+        {"name": "NumD", "label": "年額費用", "format": "C"},
+        {"name": "DateA", "label": "契約開始日"},
+        {"name": "DateB", "label": "有効期限"},
+        {"name": "Manager", "label": "管理担当者"},
+        {"name": "Body", "label": "備考"}
+      ],
+      "aggregations": [{"groupBy": "Status"}, {"groupBy": "ClassD", "target": "NumD"}],
+      "formulas": [{"target": "NumC", "expr": "NumA - NumB"}],
+      "views": [
+        {"name": "標準", "sort": {"Title": "asc"}},
+        {"name": "有効な契約", "filter": {"Status": [100, 200]}, "sort": {"DateB": "asc"}},
+        {"name": "部署別年額費用", "mode": "Crosstab", "filter": {"Status": [100, 200]},
+         "CrosstabGroupByX": "ClassD", "CrosstabGroupByY": "ClassA", "CrosstabAggregateType": "Total", "CrosstabValue": "NumD"}
+      ],
+      "reminders": [
+        {"subject": "有効期限が60日以内のソフトウェアライセンス",
+         "body": "以下のライセンスの有効期限が60日以内に到来します。更新要否を確認してください。",
+         "line": "[Title] [ClassD] 期限:[DateB] 保有:[NumA]", "column": "DateB", "days": 60, "view": "有効な契約"}
+      ]
+    }
+  ]
+}
