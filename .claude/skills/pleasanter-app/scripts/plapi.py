@@ -6,8 +6,8 @@ import urllib.parse
 import urllib.request
 
 LOCAL_HOSTS = {'localhost', '127.0.0.1'}
-# 外部の接続先は、自分が管理する（または利用を許可された）プリザンターのホスト名だけを書く
-ALLOWED_REMOTE_HOSTS = set()
+# localhost 以外の接続先。プリザンターのデモ環境は最初から入れてある。自分のサーバーを使うときはホスト名を追加する
+ALLOWED_REMOTE_HOSTS = {'demo.pleasanter.org'}
 
 USER_AGENT = 'pleasanter-app-builder/1.0'
 
